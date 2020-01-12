@@ -1,48 +1,57 @@
-require 'faraday_middleware'
+require 'yaml'
+require 'json'
+require 'faraday'
 
 class Exercise
-  DOMAIN = 'https://api.github.com/'.freeze
+  config = YAML.load_file("config.yml")
+  DOMAIN = config['github']['domain'].freeze
+  SCORES = Hash.new(1)
+  SCORES.merge!(config['github']['scores']).freeze
 
+  # initialize profile and client
   def initialize(user='DHH')
-    @type_scores = get_type_wise_scores.freeze
-    @client = get_response
     @user_profile = user
+    @client = Faraday.new(url: DOMAIN)
   end
 
+  # get github response,
+  # calculate and display score,
+  # handle error
   def get_score
-    response = @client.get(url)
-    return "Failed for profile #{@user_profile}, " unless response.success?
+    response = get_response(get_url)
+    return puts response[:body] if (response[:status] != 200)
     begin
-      total_score = response.body.reduce(0) {|score, record| score + @type_scores[record['type']]}
+      total_score = calculate_score(response[:body])
       message = "#{@user_profile}'s github score is #{total_score}"
     rescue Exception => e
       message = "Could not complete the request due to Error: #{e.inspect}"
     end
-    puts message
+    return puts message
   end
 
   private
-  def get_type_wise_scores
-    scores = Hash.new(1)
-    scores['IssuesEvent'] = 7
-    scores['IssueCommentEvent'] = 6
-    scores['PushEvent'] = 5
-    scores['PullRequestReviewCommentEvent'] = 4
-    scores['WatchEvent'] = 3
-    scores['CreateEvent'] = 2
-    return scores
+  # get response
+  # parse json response
+  def get_response(url)
+    response =  @client.get do |request|
+                    request.url url
+                end
+    body =  unless response.success?
+              "Failed for profile #{@user_profile}"
+            else
+              JSON.parse(response.body)
+            end
+    return {status: response.status, body: body}
   end
 
-  def get_response
-    connection =  Faraday.new do |f|
-                    f.response :json
-                    f.adapter :net_http
-                  end
-    return connection
+  # get profile url
+  def get_url
+    return (DOMAIN + "/users/#{@user_profile}/events/public")
   end
 
-  def url
-    return (DOMAIN + "users/#{@user_profile}/events/public")
+  # calculate score from response
+  def calculate_score(body)
+    body.reduce(0) {|score, record| score + SCORES[record['type']]}
   end
 end
 

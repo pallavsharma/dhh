@@ -19,7 +19,7 @@ class Exercise
   # handle error
   def get_score
     response = get_response(get_url)
-    return puts response[:body] if (response[:status] != 200)
+    return puts "Failed for profile #{@user_profile}" if (response[:status] != 200)
     begin
       total_score = calculate_score(response[:body])
       message = "#{@user_profile}'s github score is #{total_score}"
@@ -36,12 +36,7 @@ class Exercise
     response =  @client.get do |request|
                     request.url url
                 end
-    body =  unless response.success?
-              "Failed for profile #{@user_profile}"
-            else
-              JSON.parse(response.body)
-            end
-    return {status: response.status, body: body}
+    return {status: response.status, body: JSON.parse(response.body)}
   end
 
   # get profile url
